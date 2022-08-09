@@ -298,7 +298,7 @@ def read_avg_dens():
 # # plt.plot(br_dim, br_data)
 # # plt.show()
 
-plasma_shots = read_shots(brchange = True, HHD  = True) # Generate a list of shot objects that have brightness change and H/H+D ratio loaded
+plasma_shots = read_shots(brchange = True, HHD  = True)
 HHD_plot(plasma_shots, W_color = True)
 # density_plot()
 
