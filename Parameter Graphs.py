@@ -3,85 +3,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 import csv
 import scipy.optimize as opt
+import plasma_shot as ps
 
 """
 This script generates plots of different plasma parameters, especially in comparison to the brightness change over the pumpout phenomemon. Most
 plots are made to replicate figures from J. E. Rice et al 2022 Nucl. Fusion 62 086009
 """
-
-class plasma_shot:
-
-    def __init__(self, shot_number):
-        self.shot_num = shot_number
-        self.HHD = 0
-        self.W = 0
-        self.br_chng = 0
-
-    def set_br_data(self):
-        #Get Z-Line Integrated Brightness
-        specTree = MDSplus.Tree('spectroscopy', self.shot_num)
-        br_branch = specTree.getNode(r'\SPECTROSCOPY::TOP.HIREX_SR.ANALYSIS.Z:INT')
-        self.br_data = br_branch.data()[0] #Location 2-250
-        self.br_dim = br_branch.dim_of(0)
-
-    def set_HHD_data(self):
-        #Get H/H+D Data
-        specTree = MDSplus.Tree('spectroscopy',  self.shot_num)
-        HD_branch = specTree.getNode(r'\SPECTROSCOPY::BALMER_H_TO_D')
-        HD_data = np.array(HD_branch.data())
-        self.HHD_data = HD_data / (1 + HD_data)
-        self.HHD_dim = HD_branch.dim_of(0)
-        self.HHD_average = np.average(self.HHD_data)
-        self.HHD_std = np.std(self.HHD_data)
-
-    def set_WMHD(self):
-        anTree = MDSplus.Tree('analysis', self.shot_num)
-        WMHD_node = anTree.getNode(r'\analysis::EFIT_AEQDSK:wplasm')
-        WMHD_data = WMHD_node.data()
-        WMHD_dim = WMHD_node.dim_of(0)
-        WMHD_max = np.max(WMHD_data)
-
-        self.WMHD_dim = WMHD_dim
-        self.WMHD_data = WMHD_data
-        self.WMHD_max = WMHD_max
-
-    def set_RF(self):
-        RFTree = MDSplus.Tree('rf', self.shot_num)
-        RFbranch = RFTree.getNode(r'\rf::RF_POWEr_net')
-        RFdata = RFbranch.data()
-        self.RF = RFdata
-    
-    def set_ne(self):
-        electronTree = MDSplus.Tree('electrons', self.shot_num)
-        ne_branch = electronTree.getNode(r'\ELECTRONS::top.tci.results:nL_04')
-        ne_data = np.array(ne_branch.data())/0.6
-        ne_dim = ne_branch.dim_of(0)
-        self.ne_data = ne_data
-        self.ne_dim = ne_dim
-
-    def set_br_chng(self, br_chng):
-        self.br_chng = br_chng
-
-    def get_shot_num(self):
-        return self.shot_num
-    
-    def get_HHD_average(self):
-        return self.HHD_average
-    
-    def get_HHD_std(self):
-        return self.HHD_std
-
-    def get_br_chng(self):
-        return self.br_chng
-    
-    def get_br_data(self):
-        return (self.br_dim, self.br_data)
-    
-    def get_WMHD_max(self):
-        return self.WMHD_max
-
-    def get_ne(self):
-        return self.ne_dim, self.ne_data
 
 def average_over(x, y, x_range):
     """
@@ -107,7 +34,7 @@ def average_over(x, y, x_range):
     std = std * 10**19
     return average, std
 
-def read_shots(brchange = False, HHD = False):
+def read_shots(brchange = False, HHD = False, n_e = False):
     """
     Reads the shot numbers and generates a list of shot objects with Shot Number, Brightness Change, and HHD data set. Depends on Brightness Changes.txt and Shot Numbers.txt
 
@@ -120,6 +47,7 @@ def read_shots(brchange = False, HHD = False):
 
     br = open('Brightness Changes.txt')
     sh = open('Shot Numbers.txt')
+    ne = open('n_e.txt')
 
     prefix = 0
     line = sh.readline()
@@ -139,7 +67,7 @@ def read_shots(brchange = False, HHD = False):
                 # Shot from multiple in one day
                 shot_num = prefix + int(line[:-1])
 
-            s = plasma_shot(shot_num)
+            s = ps.shot(shot_num)
             plasma_shots.append(s)
 
             if brchange:
@@ -149,21 +77,27 @@ def read_shots(brchange = False, HHD = False):
             if HHD:
                 s.set_HHD_data()
 
+            if n_e:
+                n_e = float(ne.readline()[:-1])
+                s.set_n_e(n_e)
+
         line = sh.readline()
     
     return plasma_shots
 
-def HHD_plot(plasma_shots, W_color = False, T_E_color = False, chosen = False):
+def HHD_plot(plasma_shots, plot_W = False, plot_T_E = False, plot_chosen = False, plot_date = False):
     """
     Create a plot of H/H+D ratio vs. Brightness Change. Depends on files Brightness Changes.txt, Shot Numbers.txt, and T_E_color.
 
     Parameters
     plasma_shots (array): List of plasma shot objects
-    W_color (bool, default: False): If True, color-code the plot by max W_MHD
-    T_E_color (bool, default: False): If True, color-code the plot by T_E
-    chosen (bool, default: False): If True, color-code the plot based on the shots listed
+    plot_W (bool, default: False): If True, color-code the plot by max W_MHD
+    plot_T_E (bool, default: False): If True, color-code the plot by T_E
+    plot_chosen (bool, default: False): If True, color-code the plot based on the shots listed
+    plot_date (bool, default: False): If True, color-code the plot based on date of shot
 
-    Returns: None
+    Returns:
+    fig, ax: Figure and axis objects
     """
     
     HHDs = []
@@ -173,23 +107,21 @@ def HHD_plot(plasma_shots, W_color = False, T_E_color = False, chosen = False):
     for s in plasma_shots:
         br_chngs.append(s.get_br_chng())
         HHDs.append(s.get_HHD_average())
-        if W_color:
+        if plot_W:
             s.set_WMHD()
             W.append(s.get_WMHD_max())
 
-    fig = plt.figure()
+    fig, ax = plt.subplots()
     plt.xlabel('H/H+D Ratio')
     plt.ylabel('Brightness Change')
 
-    if W_color:
-        W = np.array(W)/1000
-        c_day = np.array([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 
-        6, 6, 6, 7, 8, 8, 8, 9])/9
-        plt.scatter(HHDs, br_chngs, c = c_day, cmap = 'Set1')
-        # plt.colorbar(label = 'Color Based on day', cmap = 'Set1')
-        # plt.scatter(HHDs, br_chngs, c = W, cmap = 'gist_rainbow')
-        # plt.colorbar(label = 'W_MHD (kJ)', cmap = 'gist_rainbow')
-    elif T_E_color:
+    if plot_W:
+        # Color based on W
+        plt.scatter(HHDs, br_chngs, c = np.array(W)/1000, cmap = 'gist_rainbow')
+        plt.colorbar(label = 'W_MHD (kJ)', cmap = 'gist_rainbow')
+
+    elif plot_T_E:
+        # Get list of T_E data
         T_E_file = open('T_E.txt')
         line = T_E_file.readline()
         T_E = []
@@ -197,50 +129,78 @@ def HHD_plot(plasma_shots, W_color = False, T_E_color = False, chosen = False):
             T_E.append(float(line[:-1]))
             line = T_E_file.readline()
         
+        # Color plot based on T_E
         plt.scatter(HHDs, br_chngs, c = T_E, cmap = 'gist_rainbow')
         plt.colorbar(label = 'Energy Confinement Time', cmap = 'gist_rainbow')
         
-    else:
+    elif plot_chosen:
+        # Color the plot differently for shots chosen as good representatives of trend
         # plt.plot(HHDs, br_chngs, '.')
         c = []
-        chosen = [1160420024, 1140221007, 1120510027, 1140212015, 1140213022,
+        chosen_shots = [1160420024, 1140221007, 1120510027, 1140212015, 1140213022,
             1140213022, 1140213022, 1140221009, 1120510028, 1140213027, 1120523016, 1140213013]
         for s in plasma_shots:
             shot_num = s.get_shot_num()
-            if shot_num in chosen:
+            if shot_num in chosen_shots:
                 c.append(1)
             else:
                 c.append(0)
 
         plt.scatter(HHDs, br_chngs, c=c, cmap = 'Set1')
     
-    plt.show()
+    elif plot_date:
+        # Color the plot according to the date of the shot
+        W = np.array(W)/1000
+        c_day = np.array([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 
+        6, 6, 6, 7, 8, 8, 8, 9])/9
+        plt.scatter(HHDs, br_chngs, c = c_day, cmap = 'Set1')
+    
+    else:
+        plt.plot(HHDs, br_chngs, 'r.')
 
-def density_plot():
+    return fig, ax
 
+def density_plot(plasma_shots, plot_HHD_diff = False):
+    """
+    Generates a plot of the H/H+D ratio of plasma shots versus their brightness change
+
+    Parameters:
+    plasma_shots (Array): List of shot objects to plot
+
+    Returns:
+    fig, ax: Figure and axis objects for plot
+    """
     bright_chg = []
     HHD = []
-    plasma_shots = read_shots(brchange = True, HHD = True)
+    density = []
    
     for shot in plasma_shots:
         change = shot.get_br_chng()
-        HHD_ratio = shot.get_HHD_average()
+        if plot_HHD_diff:
+            HHD_ratio = shot.get_HHD_average()
+            HHD.append(HHD_ratio)
+        density.append(shot.get_n_e())
         bright_chg.append(change)
-        HHD.append(HHD_ratio)
+        
+    print("Max Density: ", np.max(density))
+    print("Min Density: ", np.min(density))
+
+    # c_day = np.array([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 
+    #     6, 6, 6, 7, 8, 8, 8, 9])/9
+    fig, ax = plt.subplots()
+
+    if plot_HHD_diff:
+        HHD_diff = np.abs(np.array(HHD) - 0.31)/0.31
+
+        ax.scatter(np.array(density)*10e19, bright_chg, c=HHD_diff, cmap = 'gist_rainbow')
+        ax.colorbar(label = 'Percent Difference of H/H+D Ratio from 0.31', cmap = 'gist_rainbow')
     
-    density = read_avg_dens()
-    print(density)
-    print(np.max(density))
-    print(np.min(density))
+    else:
+        ax.plot(np.array(density)*10e19, bright_chg, 'r.')
 
-    c_day = np.array([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 
-        6, 6, 6, 7, 8, 8, 8, 9])/9
-
-    HHD_diff = np.abs(np.array(HHD) - 0.31)/0.31
-
-    plt.scatter(density, bright_chg, c=HHD_diff, cmap = 'gist_rainbow')
-    plt.colorbar(label = 'Percent Difference of H/H+D Ratio from 0.31', cmap = 'gist_rainbow')
-    plt.show()
+    ax.set_xlabel("Density (x10e19 m^-3)")
+    ax.set_ylabel("Brightness Change")
+    return fig, ax
 
 def auto_avg_dens(shot):
     """
@@ -289,26 +249,46 @@ def read_avg_dens():
     
     return densities
 
-# shot = plasma_shot(1140221012)
-# shot.set_br_data()
-# br_dim, br_data = shot.get_br_data()
-# # print(br_dim)
-# average_over(br_dim, br_data, [0.8, 1])
-# # print(average, std)
-# # plt.plot(br_dim, br_data)
-# # plt.show()
+def dens_plot_const_HHD(plasma_shots, HHD_range = [0, 1]):
+    """
+    Plots density versus brightness change for shots within a specified ratio of H/H+D ratio
 
-plasma_shots = read_shots(brchange = True, HHD  = True)
-HHD_plot(plasma_shots, W_color = True)
-# density_plot()
+    Parameters:
+    plasma_shots (Array): List of shot objects to plot
+    HHD_range (Array): Range over which to plot
+    """
 
-# shot_num = 1150522022
+    shots_in_range = []
+    for shot in plasma_shots:
+        if HHD_range[0] <= shot.get_HHD_average() <= HHD_range[1]:
+            shots_in_range.append(shot)
+    
+    fig, ax = density_plot(shots_in_range)
+    ax.set_title('Density plot over H/H+D range ({0} - {1})'.format(HHD_range[0], HHD_range[1]))
+    plt.show()
 
-# shot = plasma_shot(shot_num)
-# shot.set_ne()
-# times, density = shot.get_ne()
+def plot_same_day(plasma_shots, date, density = True, HHD =  True):
+    """
+    Make a plot of density or HHD versus brightness change over a specific day
+    """
 
-# start = 0.6
-# stop = 1.5
-# average, std = average_over(times, density, (start, stop))
-# print(average)
+    shots_on_date = []
+    for shot in plasma_shots:
+        shot.set_date()
+        if shot.get_date() == date:
+            shots_on_date.append(shot)
+    
+    if density:
+        fig, ax = density_plot(shots_on_date)
+        ax.set_title('Density plot on date {0}/{1}/20{2}'.format(date[2:4], date[4:], date[0:2]))
+        plt.show()
+
+    if HHD:
+        fig, ax = HHD_plot(shots_on_date)
+        ax.set_title('HHD plot on date {0}/{1}/20{2}'.format(date[2:4], date[4:], date[0:2]))
+        plt.show()
+
+plasma_shots = read_shots(brchange = True, HHD  = True, n_e = True) # Generate list of plasma shots with brightness change and H/H+D ratio loaded
+# HHD_plot(plasma_shots, plot_W = True)  # Generate plot of H/H+D ratio versus brightness change
+# density_plot()    # Generate plot of density verus brightness change
+plot_same_day(plasma_shots, '140213')
