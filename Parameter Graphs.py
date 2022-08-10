@@ -11,6 +11,9 @@ This script generates plots of different plasma parameters, especially in compar
 plots are made to replicate figures from J. E. Rice et al 2022 Nucl. Fusion 62 086009
 """
 def flatten(nested_list):
+    """
+    Flatten list passed in as nested_list
+    """
     new_list = []
     for item in nested_list:
         if isinstance(item, list):
@@ -56,21 +59,27 @@ def read_shots(brchange = False, HHD = False, n_e = False):
     print('Loading Plasma Shot Data \n')
     path = r'/home/imars23/Desktop/Data/'
 
+    # Choose columns to read data from
     columns = 'A'
-
     if brchange:
         columns += ', R'
     if n_e:
         columns += ', T'
+    
+    # Load data
     data = pd.read_excel(path + r'Pumpout_Shots_Database.xlsx', engine = 'openpyxl', usecols = columns, nrows = 51 )
+
+    # Create list of shot numbers
     shot_numbers = pd.DataFrame(data, columns = ['Shot Number']).values.tolist()
     shot_numbers = flatten(shot_numbers)
 
+    # Create lists of other parameters
     if brchange:
         br_changes = flatten(pd.DataFrame(data, columns = ['Br Change']).values.tolist())
     if n_e:
         densities = flatten(pd.DataFrame(data, columns = ['Average n_e']).values.tolist())
 
+    # Store data in shot objects
     plasma_shots = []
     print('Reading Plasma Shot Data \n')
     for i, shot_num in enumerate(shot_numbers):
@@ -84,10 +93,9 @@ def read_shots(brchange = False, HHD = False, n_e = False):
             s.set_HHD_data()
         
         plasma_shots.append(s)
+
     print('Done \n')
-
     return plasma_shots
-
 
 def HHD_plot(plasma_shots, plot_W = False, plot_T_E = False, plot_chosen = False, plot_date = False):
     """
@@ -136,7 +144,6 @@ def HHD_plot(plasma_shots, plot_W = False, plot_T_E = False, plot_chosen = False
         
     elif plot_chosen:
         # Color the plot differently for shots chosen as good representatives of trend
-        # plt.plot(HHDs, br_chngs, '.')
         c = []
         chosen_shots = [1160420024, 1140221007, 1120510027, 1140212015, 1140213022,
             1140213022, 1140213022, 1140221009, 1120510028, 1140213027, 1120523016, 1140213013]
@@ -183,11 +190,6 @@ def density_plot(plasma_shots, plot_HHD_diff = False):
         density.append(shot.get_n_e())
         bright_chg.append(change)
         
-    # print("Max Density: ", np.max(density))
-    # print("Min Density: ", np.min(density))
-
-    # c_day = np.array([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 
-    #     6, 6, 6, 7, 8, 8, 8, 9])/9
     fig, ax = plt.subplots()
 
     if plot_HHD_diff:
@@ -218,13 +220,6 @@ def auto_avg_dens(shot):
     if shot_num[2] == '2':  # Shot is from 2012. These have fewer data points so need to treat differently
         avg_density, std = average_over(x, y, [0.5, 1.5]) # Should correspond approximately to the time range 0.5 < t < 1.5
 
-        # try:
-        #     if not 0.4 < x[215] < 0.6 or not 1.4 < x[615] < 1.6:
-        #         raise Exception('Time window for shot {0} out of bounds 0.5 < t < 1.5'.format(shot_num))
-        # except IndexError:
-        #     raise Exception('Index Error for shot {0}. Time length is {1}'.format(shot_num, str(len(x))))
-        
-        # avg_density = np.average(y_windowed)
     else:
         y_windowed = y[1077:3077]   # Should correspond approximately to the time range 0.5 < t < 1.5
         
