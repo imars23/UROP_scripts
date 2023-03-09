@@ -1,0 +1,42 @@
+'''
+Generates ASCOT4 input files from magnetic equilibrium and plasma parameter profiles
+
+imars, Jan 27, 2023
+'''
+
+import numpy as np
+import matplotlib.pyplot as plt
+import xarray
+from omfit_classes import omfit_eqdsk
+from scipy.interpolate import interp1d
+import os
+
+g_file_path = "/home/imars23/Desktop/Data/TRANSP_013/g1140221013.01000"
+
+geqdsk = omfit_eqdsk.OMFITgeqdsk(g_file_path)
+
+print(geqdsk.keys())
+
+ga_code_path = "/home/imars23/Desktop/Data/GA_Codes/input_t0.8s.gacode"
+
+f = open(ga_code_path)
+data_list = []
+line = f.readline()
+while line != "":
+    if line[0] == "#":
+        try: data_list.append(lines)
+        except:
+            pass
+        lines = []
+    lines.append(line[:-1])
+    line = f.readline()
+
+data = {}
+for section in data_list:
+    if len(section) > 1:
+        key = section.pop(0)
+        key = key.split(' ')[1]
+        data[key] = section
+        
+data['name'] = data['name'][0].split(' ')
+print(data['name'])

@@ -298,3 +298,5 @@ plasma_shots = read_shots(brchange = True, HHD  = True, n_e = True) # Generate l
 # plot_same_day(plasma_shots, '140221') # Generate plot of density versus brightness change for a specific day
 for date in ['140213', '140221']:
     plot_same_day(plasma_shots, date, HHD = False)
+
+    
